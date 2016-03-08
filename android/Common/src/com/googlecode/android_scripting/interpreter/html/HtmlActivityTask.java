@@ -17,21 +17,18 @@
 package com.googlecode.android_scripting.interpreter.html;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.net.Uri;
-import android.view.ContextMenu;
+import android.view.*;
 import android.view.ContextMenu.ContextMenuInfo;
-import android.view.Menu;
-import android.view.View;
-import android.view.Window;
-import android.webkit.JsPromptResult;
-import android.webkit.JsResult;
-import android.webkit.WebChromeClient;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
+import android.webkit.*;
+import android.os.Handler;
 
+
+import android.widget.Toast;
 import com.googlecode.android_scripting.FileUtils;
 import com.googlecode.android_scripting.Log;
 import com.googlecode.android_scripting.SingleThreadExecutor;
@@ -55,6 +52,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -66,8 +64,8 @@ public class HtmlActivityTask extends FutureActivityTask<Void> {
 
   private static final String HTTP = "http";
   private static final String ANDROID_PROTOTYPE_JS =
-      "Android.prototype.%1$s = function(var_args) { "
-          + "return this._call(\"%1$s\", Array.prototype.slice.call(arguments)); };";
+          "Android.prototype.%1$s = function(var_args) { "
+                  + "return this._call(\"%1$s\", Array.prototype.slice.call(arguments)); };";
 
   private static final String PREFIX = "file://";
   private static final String BASE_URL = PREFIX + InterpreterConstants.SCRIPTS_ROOT;
@@ -85,9 +83,10 @@ public class HtmlActivityTask extends FutureActivityTask<Void> {
   private MyWebViewClient mWebViewClient;
   private static HtmlActivityTask reference;
   private boolean mDestroyManager;
+  boolean doubleBackToExitPressedOnce = false;
 
   public HtmlActivityTask(RpcReceiverManager manager, String androidJsSource, String jsonSource,
-      String url, boolean destroyManager) {
+                          String url, boolean destroyManager) {
     reference = this;
     mReceiverManager = manager;
     mJsonSource = jsonSource;
@@ -99,6 +98,7 @@ public class HtmlActivityTask extends FutureActivityTask<Void> {
     mUiFacade = mReceiverManager.getReceiver(UiFacade.class);
     mUrl = url;
     mDestroyManager = destroyManager;
+
   }
 
   public RpcReceiverManager getRpcReceiverManager() {
@@ -125,8 +125,8 @@ public class HtmlActivityTask extends FutureActivityTask<Void> {
           throw new RuntimeException(e);
         }
         source =
-            "<script>" + mJsonSource + "</script>" + "<script>" + mAndroidJsSource + "</script>"
-                + "<script>" + mAPIWrapperSource + "</script>" + source;
+                "<script>" + mJsonSource + "</script>" + "<script>" + mAndroidJsSource + "</script>"
+                        + "<script>" + mAPIWrapperSource + "</script>" + source;
         mView.loadDataWithBaseURL(BASE_URL, source, "text/html", "utf-8", null);
       } else {
         mView.loadUrl(url);
@@ -140,6 +140,12 @@ public class HtmlActivityTask extends FutureActivityTask<Void> {
     mView = new WebView(getActivity());
     mView.setId(1);
     mView.getSettings().setJavaScriptEnabled(true);
+    if(android.os.Build.VERSION.SDK_INT >= 20) {
+      this.mView.getSettings().setDomStorageEnabled(true);
+    }
+    if (android.os.Build.VERSION.SDK_INT >= 20){                    // Removed Screen Clipping in Lollipop
+      mView.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+    }
     mView.addJavascriptInterface(mWrapper, "_rpc_wrapper");
     mView.addJavascriptInterface(new Object() {
 
@@ -173,6 +179,30 @@ public class HtmlActivityTask extends FutureActivityTask<Void> {
     } else {
       mView.loadUrl(mUrl);
     }
+  }
+
+  @Override
+  public boolean onKeyDown(int keyCode, KeyEvent event) {
+    if(keyCode == 4) {
+      if(this.doubleBackToExitPressedOnce) {
+        Intent toast1 = new Intent("android.intent.action.MAIN");
+        toast1.addCategory("android.intent.category.HOME");
+        toast1.setFlags(268435456);
+        this.startActivity(toast1);
+        return true;
+      }
+
+      this.doubleBackToExitPressedOnce = true;
+      Toast toast = Toast.makeText(this.getActivity(), "Press Again To Exit", Toast.LENGTH_SHORT);
+      toast.show();
+      (new Handler()).postDelayed(new Runnable() {
+        public void run() {
+          HtmlActivityTask.this.doubleBackToExitPressedOnce = false;
+        }
+      }, 2000L);
+    }
+
+    return true;
   }
 
   @Override
@@ -215,6 +245,7 @@ public class HtmlActivityTask extends FutureActivityTask<Void> {
 
   private class JavaScriptWrapper {
     @SuppressWarnings("unused")
+    @JavascriptInterface
     public String call(String data) throws JSONException {
       Log.v("Received: " + data);
       JSONObject request = new JSONObject(data);
@@ -234,6 +265,7 @@ public class HtmlActivityTask extends FutureActivityTask<Void> {
     }
 
     @SuppressWarnings("unused")
+    @JavascriptInterface
     public void dismiss() {
       Activity parent = getActivity();
       parent.finish();
@@ -357,7 +389,7 @@ public class HtmlActivityTask extends FutureActivityTask<Void> {
 
     @Override
     public boolean onJsPrompt(WebView view, String url, final String message,
-        final String defaultValue, final JsPromptResult result) {
+                              final String defaultValue, final JsPromptResult result) {
       final UiFacade uiFacade = mReceiverManager.getReceiver(UiFacade.class);
       mmExecutor.execute(new Runnable() {
         @Override
