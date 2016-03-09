@@ -1,0 +1,3 @@
+source("/sdcard/com.googlecode.bshforandroid/extras/bsh/android.bsh");
+droid = Android();
+droid.call("makeToast", "Hello, Android!");
