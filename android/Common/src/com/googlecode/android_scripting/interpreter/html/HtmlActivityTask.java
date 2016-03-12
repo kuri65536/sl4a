@@ -150,6 +150,7 @@ public class HtmlActivityTask extends FutureActivityTask<Void> {
     mView.addJavascriptInterface(new Object() {
 
       @SuppressWarnings("unused")
+      @JavascriptInterface
       public void register(String event, int id) {
         mObserver.register(event, id);
       }
@@ -275,6 +276,7 @@ public class HtmlActivityTask extends FutureActivityTask<Void> {
   private class HtmlEventObserver implements EventFacade.EventObserver {
     private Map<String, Set<Integer>> mEventMap = new HashMap<String, Set<Integer>>();
 
+    @JavascriptInterface
     public void register(String eventName, Integer id) {
       if (mEventMap.containsKey(eventName)) {
         mEventMap.get(eventName).add(id);
